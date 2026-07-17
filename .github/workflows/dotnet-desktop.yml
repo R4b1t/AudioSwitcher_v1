@@ -29,15 +29,17 @@ jobs:
       run: nuget restore FortyOne.AudioSwitcher.sln -Source https://api.nuget.org/v3/index.json
 
     # .NET Framework 4.8 targeting pack is preinstalled on windows-latest.
-    # Release signing uses a local pfx — disable signing in CI.
+    # Disable assembly signing and LibZ post-build packaging in CI.
     - name: Build AudioSwitcher GUI
       run: >
         msbuild FortyOne.AudioSwitcher\FortyOne.AudioSwitcher.GUI.csproj
         /p:Configuration=${{ matrix.configuration }}
         /p:Platform=AnyCPU
         /p:SignAssembly=false
+        /p:RunPostBuildEvent=Never
         /m
         /v:m
+
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
