@@ -1,4 +1,4 @@
-# Build Audio Switcher (WinForms, .NET Framework 4.5.2)
+# Build Audio Switcher (WinForms, .NET Framework 4.8)
 name: Build
 
 on:
@@ -28,7 +28,7 @@ jobs:
     - name: Restore NuGet packages
       run: nuget restore FortyOne.AudioSwitcher.sln -Source https://api.nuget.org/v3/index.json
 
-    # This app is classic .NET Framework WinForms (not .NET Core / MSIX).
+    # .NET Framework 4.8 targeting pack is preinstalled on windows-latest.
     # Release signing uses a local pfx — disable signing in CI.
     - name: Build AudioSwitcher GUI
       run: >
