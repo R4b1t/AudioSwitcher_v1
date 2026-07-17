@@ -20,6 +20,11 @@
             //Do nothing
         }
 
+        public void Flush()
+        {
+            // Immediate writes already
+        }
+
         public string Get(string key)
         {
             return _writer.IniReadValue(SECTION_NAME, key);

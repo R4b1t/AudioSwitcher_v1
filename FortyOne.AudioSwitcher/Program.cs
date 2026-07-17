@@ -1,22 +1,20 @@
 ﻿using System;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using FortyOne.AudioSwitcher.Configuration;
+using FortyOne.AudioSwitcher.Helpers;
 using FortyOne.AudioSwitcher.Properties;
 
 namespace FortyOne.AudioSwitcher
 {
     internal static class Program
     {
-
         public static string AppDataDirectory { get; private set; }
 
         public static ConfigurationSettings Settings { get; private set; }
 
-        /// <summary>
-        ///     The main entry point for the application.
-        /// </summary>
         [STAThread]
         private static void Main()
         {
@@ -24,9 +22,10 @@ namespace FortyOne.AudioSwitcher
             AppDomain.CurrentDomain.UnhandledException += WinFormExceptionHandler.OnUnhandledCLRException;
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
 
+            TryEnableDpiAwareness();
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-
 
             if (Environment.OSVersion.Version.Major < 6)
             {
@@ -42,45 +41,28 @@ namespace FortyOne.AudioSwitcher
 
             var settingsPath = Path.Combine(AppDataDirectory, Resources.ConfigFile);
 
-            //Delete the old updater
             try
             {
-                //v1.5 and less
-                var updaterPath = Application.StartupPath + "AutoUpdater.exe";
-                if (File.Exists(updaterPath))
-                    File.Delete(updaterPath);
-
-                //v1.6
-                updaterPath = Path.Combine(Directory.GetParent(Assembly.GetEntryAssembly().Location).FullName, "AutoUpdater.exe");
-                if (File.Exists(updaterPath))
-                    File.Delete(updaterPath);
-
-                //v1.6.7
-                updaterPath = Path.Combine(AppDataDirectory, "AutoUpdater.exe");
-                if (File.Exists(updaterPath))
-                    File.Delete(updaterPath);
+                // Remove legacy AutoUpdater leftovers
+                TryDelete(Application.StartupPath + "AutoUpdater.exe");
+                TryDelete(Path.Combine(Directory.GetParent(Assembly.GetEntryAssembly().Location).FullName, "AutoUpdater.exe"));
+                TryDelete(Path.Combine(AppDataDirectory, "AutoUpdater.exe"));
             }
             catch
             {
-                //This shouldn't prevent the application from running
             }
 
             try
             {
                 var iniSettingsPath = Path.Combine(Directory.GetParent(Assembly.GetEntryAssembly().Location).FullName, Resources.OldConfigFile);
-
-                if (File.Exists(iniSettingsPath))
-                    File.Delete(iniSettingsPath);
+                TryDelete(iniSettingsPath);
             }
             catch
             {
-                // ignored
             }
 
             try
             {
-
-                //old json settings
                 var oldJsonSettingsPath = Path.Combine(Directory.GetParent(Assembly.GetEntryAssembly().Location).FullName, Resources.ConfigFile);
 
                 ISettingsSource jsonSource = new JsonSettings();
@@ -92,7 +74,6 @@ namespace FortyOne.AudioSwitcher
                 {
                     try
                     {
-                        //Load old settings
                         ISettingsSource oldSource = new JsonSettings();
                         oldSource.SetFilePath(oldJsonSettingsPath);
 
@@ -101,16 +82,20 @@ namespace FortyOne.AudioSwitcher
                     }
                     finally
                     {
-                        File.Delete(oldJsonSettingsPath);
+                        TryDelete(oldJsonSettingsPath);
                     }
                 }
 
                 Settings.CreateDefaults();
+                Settings.Flush();
+                AppLog.Info("Audio Switcher started (updates disabled)");
             }
-            catch
+            catch (Exception ex)
             {
-                var errorMessage = String.Format("Error creating/reading settings file [{0}]. Make sure you have read/write access to this file.\r\nOr try running as Administrator",
-                        settingsPath);
+                AppLog.Error("Settings init failed", ex);
+                var errorMessage = string.Format(
+                    "Error creating/reading settings file [{0}]. Make sure you have read/write access to this file.\r\nOr try running as Administrator",
+                    settingsPath);
                 MessageBox.Show(errorMessage, "Settings File - Cannot Access");
                 return;
             }
@@ -121,17 +106,84 @@ namespace FortyOne.AudioSwitcher
             }
             catch (Exception ex)
             {
-                var title = "An Unexpected Error Occurred";
-
-                var edf = new ExceptionDisplayForm(title, ex);
+                AppLog.Error("Unhandled UI exception", ex);
+                var edf = new ExceptionDisplayForm("An Unexpected Error Occurred", ex);
                 edf.ShowDialog();
+            }
+            finally
+            {
+                try
+                {
+                    if (Settings != null)
+                        Settings.Flush();
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Error("Settings flush on exit failed", ex);
+                }
             }
         }
 
         private static void Application_ApplicationExit(object sender, EventArgs e)
         {
-            //Ensure the icon disappears from tray
-            AudioSwitcher.Instance.TrayIconVisible = false;
+            try
+            {
+                if (Settings != null)
+                    Settings.Flush();
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                AudioSwitcher.Instance.TrayIconVisible = false;
+            }
+            catch
+            {
+            }
         }
+
+        private static void TryDelete(string path)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                    File.Delete(path);
+            }
+            catch
+            {
+            }
+        }
+
+        private static void TryEnableDpiAwareness()
+        {
+            try
+            {
+                // Prefer Per-Monitor V2 when available (Windows 10 1703+)
+                if (Environment.OSVersion.Version.Major >= 10)
+                    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+                else
+                    SetProcessDPIAware();
+            }
+            catch
+            {
+                try
+                {
+                    SetProcessDPIAware();
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        private static readonly IntPtr DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = new IntPtr(-4);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetProcessDPIAware();
+
+        [DllImport("user32.dll")]
+        private static extern bool SetProcessDpiAwarenessContext(IntPtr value);
     }
 }

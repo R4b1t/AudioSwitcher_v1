@@ -90,21 +90,54 @@ namespace FortyOne.AudioSwitcher
 
         private void btnAdd_Click(object sender, EventArgs e)
         {
-            if (_mode == HotKeyFormMode.Normal && HotKeyManager.DuplicateHotKey(_hotkey))
+            if (cmbDevices.SelectedItem == null)
+            {
+                errorProvider1.SetError(cmbDevices, "Please select a device");
                 return;
+            }
 
+            if (_hotkey.Key == Keys.None)
+            {
+                errorProvider1.SetError(txtHotKey, "Please press a hotkey combination");
+                return;
+            }
+
+            bool success;
             if (_mode == HotKeyFormMode.Edit)
-                HotKeyManager.DeleteHotKey(_linkedHotKey);
+            {
+                // Update in place so a failed registration cannot delete the existing binding
+                if (HotKeyManager.DuplicateHotKey(_hotkey, _linkedHotKey))
+                {
+                    errorProvider1.SetError(txtHotKey, "Hot key is already in use by another binding");
+                    return;
+                }
 
-            //Add HK
-            if (HotKeyManager.AddHotKey(_hotkey))
+                success = HotKeyManager.UpdateHotKey(_linkedHotKey, _hotkey);
+            }
+            else
+            {
+                if (HotKeyManager.DuplicateHotKey(_hotkey))
+                {
+                    // Ghost entries are replaced inside AddHotKey; only report hard duplicates
+                    var existing = HotKeyManager.FindDuplicate(_hotkey);
+                    if (existing != null && existing.Device != null)
+                    {
+                        errorProvider1.SetError(txtHotKey, "Hot key is already in use by another binding");
+                        return;
+                    }
+                }
+
+                success = HotKeyManager.AddHotKey(_hotkey);
+            }
+
+            if (success)
             {
                 DialogResult = DialogResult.OK;
                 Close();
             }
             else
             {
-                errorProvider1.SetError(txtHotKey, "Hot Key is already registered");
+                errorProvider1.SetError(txtHotKey, "Hot key could not be registered (in use by another application or binding)");
             }
         }
 
@@ -137,8 +170,19 @@ namespace FortyOne.AudioSwitcher
 
             txtHotKey.Text = _hotkey.HotKeyString;
 
-            if (_mode != HotKeyFormMode.Edit && HotKeyManager.DuplicateHotKey(_hotkey))
-                errorProvider1.SetError(txtHotKey, "Duplicate Hot Key Detected");
+            errorProvider1.SetError(txtHotKey, "");
+
+            if (_mode == HotKeyFormMode.Edit)
+            {
+                if (HotKeyManager.DuplicateHotKey(_hotkey, _linkedHotKey))
+                    errorProvider1.SetError(txtHotKey, "Duplicate Hot Key Detected");
+            }
+            else if (HotKeyManager.DuplicateHotKey(_hotkey))
+            {
+                var existing = HotKeyManager.FindDuplicate(_hotkey);
+                if (existing != null && existing.Device != null)
+                    errorProvider1.SetError(txtHotKey, "Duplicate Hot Key Detected");
+            }
         }
 
         private void cmbDevices_SelectedIndexChanged(object sender, EventArgs e)

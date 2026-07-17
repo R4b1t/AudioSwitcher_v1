@@ -79,8 +79,9 @@
   <PropertyGroup>
     <AssemblyOriginatorKeyFile>fortyone.pfx</AssemblyOriginatorKeyFile>
   </PropertyGroup>
-  <PropertyGroup />
-  <PropertyGroup />
+  <PropertyGroup>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="AudioSwitcher.AudioApi, Version=4.0.0.308, Culture=neutral, PublicKeyToken=fda5729e2db3a64f, processorArchitecture=MSIL">
       <HintPath>..\packages\AudioSwitcher.AudioApi.4.0.0-alpha5\lib\net45\AudioSwitcher.AudioApi.dll</HintPath>
@@ -108,9 +109,6 @@
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
-    <Reference Include="WindowsInput">
-      <HintPath>..\packages\WindowsInput.0.2.0.0\lib\net20\WindowsInput.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AudioDeviceManager.cs" />
@@ -120,8 +118,10 @@
     <Compile Include="ChangeLogForm.Designer.cs">
       <DependentUpon>ChangeLogForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="Configuration\AudioProfile.cs" />
     <Compile Include="Configuration\ConfigurationSettings.cs" />
     <Compile Include="Configuration\ConfigurationWriter.cs" />
+    <Compile Include="Configuration\HotKeyEntry.cs" />
     <Compile Include="AudioSwitcher.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -138,7 +138,11 @@
       <DependentUpon>ExceptionDisplayForm.cs</DependentUpon>
     </Compile>
     <Compile Include="FavouriteDeviceManager.cs" />
+    <Compile Include="ProfileManager.cs" />
+    <Compile Include="Helpers\AppLog.cs" />
     <Compile Include="Helpers\ConnectionHelper.cs" />
+    <Compile Include="Helpers\DebounceDispatcher.cs" />
+    <Compile Include="Helpers\DeviceListViewHelper.cs" />
     <Compile Include="Helpers\ImageHelper.cs" />
     <Compile Include="HotKeyData\Enums.cs" />
     <Compile Include="HotKeyData\HotKey.cs" />
@@ -221,6 +225,7 @@
     <None Include="app.config">
       <SubType>Designer</SubType>
     </None>
+    <None Include="app.manifest" />
     <None Include="fortyone.pfx" />
     <None Include="packages.config">
       <SubType>Designer</SubType>

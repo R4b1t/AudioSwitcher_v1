@@ -1,6 +1,9 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using fastJSON;
+using FortyOne.AudioSwitcher.Helpers;
 
 namespace FortyOne.AudioSwitcher.Configuration
 {
@@ -9,6 +12,9 @@ namespace FortyOne.AudioSwitcher.Configuration
         private readonly object _mutex = new object();
         private string _path;
         private IDictionary<string, string> _settingsObject;
+        private Timer _debounceTimer;
+        private bool _dirty;
+        private const int DebounceMs = 400;
 
         public JsonSettings()
         {
@@ -27,25 +33,45 @@ namespace FortyOne.AudioSwitcher.Configuration
                 try
                 {
                     if (File.Exists(_path))
-                        _settingsObject = JSON.ToObject<Dictionary<string, string>>(File.ReadAllText(_path));
+                        _settingsObject = JSON.ToObject<Dictionary<string, string>>(File.ReadAllText(_path))
+                                           ?? new Dictionary<string, string>();
                 }
-                catch
+                catch (Exception ex)
                 {
+                    AppLog.Error("Failed to load settings file", ex);
                     _settingsObject = new Dictionary<string, string>();
                 }
+
+                _dirty = false;
             }
         }
 
         public void Save()
         {
-            try
+            // Debounced save — callers should use Flush() for immediate persistence
+            lock (_mutex)
             {
-                //Write the result to file
-                File.WriteAllText(_path, JSON.Beautify(JSON.ToJSON(_settingsObject)));
+                _dirty = true;
+                if (_debounceTimer == null)
+                {
+                    _debounceTimer = new Timer(DebounceCallback, null, DebounceMs, Timeout.Infinite);
+                }
+                else
+                {
+                    _debounceTimer.Change(DebounceMs, Timeout.Infinite);
+                }
             }
-            catch
+        }
+
+        public void Flush()
+        {
+            lock (_mutex)
             {
-                //Too bad if we can't save, not like there's anything vitally important in settings
+                if (_debounceTimer != null)
+                    _debounceTimer.Change(Timeout.Infinite, Timeout.Infinite);
+
+                if (_dirty)
+                    WriteToDiskUnlocked();
             }
         }
 
@@ -61,8 +87,66 @@ namespace FortyOne.AudioSwitcher.Configuration
         {
             lock (_mutex)
             {
+                string existing;
+                if (_settingsObject.TryGetValue(key, out existing) && existing == value)
+                    return;
+
                 _settingsObject[key] = value;
-                Save();
+                _dirty = true;
+            }
+
+            Save();
+        }
+
+        private void DebounceCallback(object state)
+        {
+            lock (_mutex)
+            {
+                if (_dirty)
+                    WriteToDiskUnlocked();
+            }
+        }
+
+        private void WriteToDiskUnlocked()
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_path))
+                    return;
+
+                var json = JSON.Beautify(JSON.ToJSON(_settingsObject));
+                var dir = Path.GetDirectoryName(_path);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                    Directory.CreateDirectory(dir);
+
+                // Atomic write: temp file then replace
+                var tempPath = _path + ".tmp";
+                File.WriteAllText(tempPath, json);
+
+                if (File.Exists(_path))
+                {
+                    var backup = _path + ".bak";
+                    try
+                    {
+                        File.Copy(_path, backup, true);
+                    }
+                    catch
+                    {
+                        // backup is best-effort
+                    }
+
+                    File.Replace(tempPath, _path, null);
+                }
+                else
+                {
+                    File.Move(tempPath, _path);
+                }
+
+                _dirty = false;
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("Failed to save settings file", ex);
             }
         }
     }
